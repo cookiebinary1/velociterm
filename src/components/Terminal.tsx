@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { copyToDownloads, createPty, writeToPty, resizePty, getHomeDir } from '../utils/tauri';
+import { copyToDownloads, createPty, writeToPty, resizePty, getHomeDir, scpDownload } from '../utils/tauri';
 import { useTerminalStore } from '../store/terminalStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { getTheme } from '../themes';
@@ -51,6 +51,7 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
   const initializingRef = useRef(false);
   const outputBufferRef = useRef<string>('');
   const lastCommandRef = useRef<string>('');
+  const osc7TailRef = useRef<string>('');
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -126,6 +127,10 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
     }
 
     if (!fileLinksDisposableRef.current) {
+      const stripToken = (raw: string) => {
+        return raw.replace(/^[\s\(\[\{"'`]+/, '').replace(/[\s\)\]\}\.,;:!\?"'`]+$/, '');
+      };
+
       const resolvePath = (token: string) => {
         const st = useTerminalStore.getState();
         const tab = st.tabs.find((t) => t.id === tabId);
@@ -149,8 +154,34 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
         return (cwd ? cwd.replace(/\/+$/g, '') : '') + '/' + t;
       };
 
-      const stripToken = (raw: string) => {
-        return raw.replace(/^[\s\(\[\{"'`]+/, '').replace(/[\s\)\]\}\.,;:!\?"'`]+$/, '');
+      const resolveRemoteSpec = (token: string) => {
+        const st = useTerminalStore.getState();
+        const tab = st.tabs.find((t) => t.id === tabId);
+        const pane = tab?.panes.find((p) => p.id === paneId);
+        const remoteTarget = pane?.remoteTarget;
+        const remoteCwd = pane?.remoteCwd;
+        if (!remoteTarget) return null;
+
+        const t = stripToken(token);
+        if (!t) return null;
+
+        if (t.startsWith('/')) return `${remoteTarget}:${t}`;
+        if (t === '~' || t.startsWith('~/')) return `${remoteTarget}:${t}`;
+        if (t.startsWith('./')) {
+          const base = remoteCwd ? remoteCwd.replace(/\/+$/g, '') : '.';
+          return `${remoteTarget}:${base}/${t.slice(2)}`;
+        }
+        if (t.startsWith('../')) {
+          const base = remoteCwd ? remoteCwd.replace(/\/+$/g, '') : '.';
+          return `${remoteTarget}:${base}/${t}`;
+        }
+
+        if (remoteCwd) {
+          const base = remoteCwd.replace(/\/+$/g, '');
+          return `${remoteTarget}:${base}/${t}`;
+        }
+
+        return `${remoteTarget}:${t}`;
       };
 
       const isCandidate = (raw: string) => {
@@ -200,10 +231,24 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
               },
               activate: (event, tokenText) => {
                 if (!event.metaKey) return;
-                const abs = resolvePath(tokenText);
-                if (!abs) return;
+                const remoteSpec = resolveRemoteSpec(tokenText);
                 event.preventDefault();
                 event.stopPropagation();
+
+                if (remoteSpec) {
+                  scpDownload(remoteSpec)
+                    .then((dest) => {
+                      if (event.shiftKey) return revealItemInDir(dest);
+                      return openPath(dest).catch(() => revealItemInDir(dest));
+                    })
+                    .catch((err: unknown) => {
+                      console.error('Failed to download remote file via scp:', remoteSpec, err);
+                    });
+                  return;
+                }
+
+                const abs = resolvePath(tokenText);
+                if (!abs) return;
 
                 // Cmd+Shift+Click = open file directly
                 if (event.shiftKey) {
@@ -299,6 +344,29 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
             
             // Error detection logic
             const serverData = event.payload.data;
+
+            const oscCombined = osc7TailRef.current + serverData;
+            osc7TailRef.current = oscCombined.slice(-300);
+            const oscRe = /\x1b\]7;file:\/\/([^\/\x07\x1b]+)(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)/g;
+            let om: RegExpExecArray | null;
+            while ((om = oscRe.exec(oscCombined))) {
+              const host = om[1] ?? '';
+              const path = om[2] ?? '';
+              if (!path) continue;
+              const st = useTerminalStore.getState();
+              const tab = st.tabs.find((t) => t.id === tabId);
+              const pane = tab?.panes.find((p) => p.id === paneId);
+              const isRemote = !!pane?.remoteTarget || (!!host && host !== 'localhost');
+
+              if (isRemote) {
+                if (!pane?.remoteTarget && host) {
+                  st.setPaneRemoteTarget(tabId, paneId, host);
+                }
+                st.setPaneRemoteCwd(tabId, paneId, path);
+              } else {
+                st.setPaneCwd(tabId, paneId, path);
+              }
+            }
             outputBufferRef.current += serverData;
             
             // Keep only last 5000 chars for error detection
@@ -380,7 +448,31 @@ export function Terminal({ tabId, paneId, isActive, searchAddonRef, fontSizeOffs
               // Extract command after prompt (simple heuristic)
               const cmdMatch = lineText.match(/[$%>#]\s+(.+)$/);
               if (cmdMatch && cmdMatch[1]) {
-                lastCommandRef.current = cmdMatch[1].trim();
+                const cmd = cmdMatch[1].trim();
+                lastCommandRef.current = cmd;
+
+                if (cmd === 'exit' || cmd === 'logout') {
+                  useTerminalStore.getState().clearPaneRemote(tabId, paneId);
+                }
+
+                if (cmd.startsWith('ssh ')) {
+                  const parts = cmd.split(/\s+/g);
+                  let target: string | null = null;
+                  const argsWithValue = new Set(['-b', '-c', '-D', '-E', '-F', '-I', '-i', '-J', '-L', '-l', '-m', '-O', '-o', '-p', '-R', '-S', '-W', '-w']);
+                  for (let i = 1; i < parts.length; i++) {
+                    const p = parts[i] ?? '';
+                    if (!p) continue;
+                    if (p.startsWith('-')) {
+                      if (argsWithValue.has(p)) i++;
+                      continue;
+                    }
+                    target = p;
+                    break;
+                  }
+                  if (target) {
+                    useTerminalStore.getState().setPaneRemoteTarget(tabId, paneId, target);
+                  }
+                }
               }
             }
             

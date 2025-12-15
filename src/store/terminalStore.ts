@@ -4,6 +4,8 @@ export interface Pane {
   id: string;
   ptyId: string | null;
   cwd: string;
+  remoteTarget?: string;
+  remoteCwd?: string;
   fontSizeOffset?: number;
   lastLatencyMs?: number;
   lastInputAt?: number;
@@ -34,6 +36,10 @@ export interface TerminalState {
   updateTab: (id: string, updates: Partial<Tab>) => void;
   setActivePane: (tabId: string, paneId: string) => void;
   setPanePtyId: (tabId: string, paneId: string, ptyId: string) => void;
+  setPaneCwd: (tabId: string, paneId: string, cwd: string) => void;
+  setPaneRemoteTarget: (tabId: string, paneId: string, remoteTarget: string) => void;
+  setPaneRemoteCwd: (tabId: string, paneId: string, remoteCwd: string) => void;
+  clearPaneRemote: (tabId: string, paneId: string) => void;
   markPaneInput: (tabId: string, paneId: string) => void;
   markPaneOutput: (tabId: string, paneId: string) => void;
   setPanePtyStatus: (tabId: string, paneId: string, status: Pane['ptyStatus']) => void;
@@ -136,6 +142,54 @@ export const useTerminalStore = create<TerminalState>((set) => ({
           ? {
               ...t,
               panes: t.panes.map((p) => (p.id === paneId ? { ...p, ptyId } : p)),
+            }
+          : t
+      ),
+    })),
+
+  setPaneCwd: (tabId, paneId, cwd) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              panes: t.panes.map((p) => (p.id === paneId ? { ...p, cwd } : p)),
+            }
+          : t
+      ),
+    })),
+
+  setPaneRemoteTarget: (tabId, paneId, remoteTarget) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              panes: t.panes.map((p) => (p.id === paneId ? { ...p, remoteTarget } : p)),
+            }
+          : t
+      ),
+    })),
+
+  setPaneRemoteCwd: (tabId, paneId, remoteCwd) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              panes: t.panes.map((p) => (p.id === paneId ? { ...p, remoteCwd } : p)),
+            }
+          : t
+      ),
+    })),
+
+  clearPaneRemote: (tabId, paneId) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              panes: t.panes.map((p) => (p.id === paneId ? { ...p, remoteTarget: undefined, remoteCwd: undefined } : p)),
             }
           : t
       ),

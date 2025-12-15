@@ -1,0 +1,27 @@
+[[permission]]
+identifier = "allow-terminal"
+description = "Allows terminal-related commands (PTY + config)."
+commands.allow = [
+  "create_pty",
+  "write_to_pty",
+  "resize_pty",
+  "kill_pty",
+  "get_shell_path",
+  "load_config",
+  "save_config",
+  "get_home_dir"
+]
+
+[[permission]]
+identifier = "deny-terminal"
+description = "Denies terminal-related commands (PTY + config)."
+commands.deny = [
+  "create_pty",
+  "write_to_pty",
+  "resize_pty",
+  "kill_pty",
+  "get_shell_path",
+  "load_config",
+  "save_config",
+  "get_home_dir"
+]

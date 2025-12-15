@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-confirm-close"
+description = "Allows invoking the confirm_close command."
+commands.allow = ["confirm_close"]
+
+[[permission]]
+identifier = "deny-confirm-close"
+description = "Denies invoking the confirm_close command."
+commands.deny = ["confirm_close"]

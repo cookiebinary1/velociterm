@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Background -->
+  <defs>
+    <!-- Cyan -> Purple gradient -->
+    <linearGradient id="g" x1="220" y1="240" x2="820" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00D9FF"/>
+      <stop offset="1" stop-color="#BD00FF"/>
+    </linearGradient>
+
+    <!-- Subtle neon glow -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <!-- Soft outer glow -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="b"/>
+      <feColorMatrix in="b" type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 0.85 0" result="c"/>
+      <feMerge>
+        <feMergeNode in="c"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Slight inner highlight -->
+    <filter id="inner" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="sa"/>
+      <feOffset in="sa" dx="0" dy="2" result="off"/>
+      <feComposite in="off" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="inset"/>
+      <feColorMatrix in="inset" type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 0.25 0" result="shade"/>
+      <feMerge>
+        <feMergeNode in="shade"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded square icon background -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#1a1a1a"/>
+
+  <!-- Main V-lightning (single shape; thick enough for small sizes) -->
+  <path filter="url(#glow)"
+        fill="url(#g)"
+        d="M 265 330
+           L 445 330
+           L 512 470
+           L 720 240
+           L 825 330
+           L 660 520
+           L 760 520
+           L 505 820
+           L 450 650
+           L 320 650
+           L 265 540
+           L 395 540
+           L 320 395
+           Z"/>
+
+  <!-- Speed lines (subtle, left side) -->
+  <g opacity="0.55" filter="url(#glow)">
+    <rect x="205" y="392" width="110" height="22" rx="11" fill="#00D9FF"/>
+    <rect x="185" y="442" width="140" height="22" rx="11" fill="#00D9FF" opacity="0.7"/>
+    <rect x="210" y="492" width="95"  height="22" rx="11" fill="#00D9FF" opacity="0.55"/>
+  </g>
+
+  <!-- Terminal prompt (>_) -->
+  <g filter="url(#glow)" transform="translate(0,0)">
+    <!-- ">" as a stroked path for crispness -->
+    <path d="M 640 700 L 705 740 L 640 780"
+          fill="none" stroke="#BD00FF" stroke-width="26"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- "_" -->
+    <path d="M 735 788 L 820 788"
+          fill="none" stroke="#BD00FF" stroke-width="26"
+          stroke-linecap="round"/>
+  </g>
+
+  <!-- Slight inner shading to feel more “app icon” -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="transparent" filter="url(#inner)"/>
+</svg>

@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-confirm-exit"
+description = "Allows invoking the confirm_exit command."
+commands.allow = ["confirm_exit"]
+
+[[permission]]
+identifier = "deny-confirm-exit"
+description = "Denies invoking the confirm_exit command."
+commands.deny = ["confirm_exit"]
